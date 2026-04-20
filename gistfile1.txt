@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rocket League 2D iPad Clavier</title>
+<style>
+html,body{margin:0;padding:0;background:#000;overflow:hidden}
+canvas{display:block;background:#0a0f1a}
+#overlay{position:fixed;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;background:#000;z-index:100}
+button{padding:10px 16px;margin:6px;font-size:16px;background:cyan;border:none;border-radius:10px}
+#ui{position:fixed;top:10px;left:10px;color:white;font-family:sans-serif}
+</style>
+</head>
+<body>
+
+<div id="overlay">
+<h2>Rocket League 2D (Clavier)</h2>
+<button onclick="startGame()">JOUER</button>
+<p>Contrôles:<br>⬆️⬇️⬅️➡️ = bouger<br>ESPACE = boost</p>
+</div>
+
+<canvas id="game"></canvas>
+<div id="ui"></div>
+
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+const ui=document.getElementById("ui");
+const overlay=document.getElementById("overlay");
+
+function resize(){canvas.width=innerWidth;canvas.height=innerHeight}
+resize();addEventListener("resize",resize);
+
+let running=false;
+
+const player={x:200,y:200,w:50,h:30,angle:0,vx:0,vy:0,boost:100};
+const enemy={x:600,y:200,w:50,h:30,vx:0,vy:0};
+const ball={x:400,y:300,r:15,vx:3,vy:2};
+
+let score1=0,score2=0;
+
+// CLAVIER
+let keys={};
+addEventListener("keydown",e=>keys[e.key.toLowerCase()]=true);
+addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
+
+function startGame(){overlay.style.display="none";running=true;loop();}
+
+function update(){
+
+if(keys["arrowup"])player.vy=-4;
+if(keys["arrowdown"])player.vy=4;
+if(keys["arrowleft"])player.vx=-4;
+if(keys["arrowright"])player.vx=4;
+
+if(!keys["arrowup"]&&!keys["arrowdown"])player.vy*=0.85;
+if(!keys["arrowleft"]&&!keys["arrowright"])player.vx*=0.85;
+
+// BOOST (espace)
+if((keys[" "] || keys["space"]) && player.boost>0){
+player.vx*=1.25;
+player.vy*=1.25;
+player.boost-=1.5;
+}
+player.boost+=0.2;if(player.boost>100)player.boost=100;
+
+player.x+=player.vx;
+player.y+=player.vy;
+player.angle=Math.atan2(player.vy,player.vx);
+
+ball.x+=ball.vx;
+ball.y+=ball.vy;
+if(ball.y<0||ball.y>canvas.height)ball.vy*=-1;
+
+if(ball.x<0){score2++;reset()}
+if(ball.x>canvas.width){score1++;reset()}
+
+hit(player);
+hit(enemy);
+
+let dx=ball.x-enemy.x;
+let dy=ball.y-enemy.y;
+let d=Math.hypot(dx,dy);
+if(d>1){
+enemy.vx=(dx/d)*2.5;
+enemy.vy=(dy/d)*2.5;
+}
+
+// anti blocage
+if(d<30){
+ball.x+=dx*0.1;
+ball.y+=dy*0.1;
+}
+
+enemy.x+=enemy.vx;
+enemy.y+=enemy.vy;
+}
+
+function hit(car){
+let dx=ball.x-car.x;
+let dy=ball.y-car.y;
+let dist=Math.hypot(dx,dy);
+let size=Math.max(car.w,car.h)/2;
+if(dist<size+ball.r){
+ball.vx=dx*0.3;
+ball.vy=dy*0.3;
+}
+}
+
+// IMAGES avec fallback
+function createImage(src){
+const img=new Image();
+img.src=src;
+img.onerror=()=>{img.broken=true};
+return img;
+}
+
+const imgFennec=createImage("https://via.placeholder.com/60x40?text=F");
+const imgOctane=createImage("https://i.postimg.cc/63k4c3Vw/IMG-0059.webp");
+const imgDominus=createImage("https://via.placeholder.com/60x40?text=D");
+
+function drawCar(x,y,angle,type){
+ctx.save();
+ctx.translate(x,y);
+ctx.rotate(angle);
+
+let img=imgFennec;
+if(type==="octane") img=imgOctane;
+if(type==="dominus") img=imgDominus;
+
+// éviter crash si image cassée
+if(img.complete && !img.broken){
+ctx.drawImage(img,-30,-20,60,40);
+}else{
+// fallback rectangle
+ctx.fillStyle="red";
+ctx.fillRect(-25,-15,50,30);
+}
+
+ctx.restore();
+}
+
+function draw(){
+ctx.fillStyle="#0a0f1a";
+ctx.fillRect(0,0,canvas.width,canvas.height);
+
+ctx.strokeStyle="#444";
+ctx.beginPath();ctx.moveTo(canvas.width/2,0);ctx.lineTo(canvas.width/2,canvas.height);ctx.stroke();
+
+ctx.fillStyle="green";
+ctx.fillRect(0,canvas.height/2-50,10,100);
+ctx.fillRect(canvas.width-10,canvas.height/2-50,10,100);
+
+// TEST: change ici pour tester
+// "fennec" | "octane" | "dominus"
+drawCar(player.x,player.y,player.angle,"octane");
+drawCar(enemy.x,enemy.y,0,"dominus");
+
+ctx.fillStyle="white";
+ctx.beginPath();ctx.arc(ball.x,ball.y,ball.r,0,Math.PI*2);ctx.fill();
+
+ui.innerText=`Score: ${score1}-${score2} | Boost: ${Math.floor(player.boost)}`;
+}
+
+function reset(){
+ball.x=canvas.width/2;
+ball.y=canvas.height/2;
+ball.vx=3*(Math.random()>0.5?1:-1);
+ball.vy=2;
+}
+
+function loop(){if(!running)return;update();draw();requestAnimationFrame(loop)}
+</script>
+</body>
+</html>
